@@ -109,6 +109,27 @@ sys.modules["mcp.server"] = _s
 sys.modules["mcp.server.fastmcp"] = _fm
 sys.modules["mcp.server.mcpserver"] = _ms
 
+# 给网络调用加自动重试（扛瞬时抖动）
+import time
+import urllib.request as _ur
+_orig_open = _ur.urlopen
+
+def _retry_open(*a, **k):
+    if not k.get("timeout"):
+        k["timeout"] = 10
+    else:
+        k["timeout"] = min(k["timeout"], 10)
+    last = None
+    for _i in range(4):
+        try:
+            return _orig_open(*a, **k)
+        except Exception as _e:
+            last = _e
+            time.sleep(1.2)
+    raise last
+
+_ur.urlopen = _retry_open
+
 # 跑真正的 jiq_mcp.py（期间的杂散 print 会被吞掉，不污染协议流）
 _t = os.path.join(os.path.dirname(os.path.abspath(__file__)), "jiq_mcp.py")
 sys.stdout = io.StringIO()
