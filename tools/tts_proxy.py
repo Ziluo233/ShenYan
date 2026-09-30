@@ -2,6 +2,7 @@
 """MiMo TTS VoiceDesign 代理 · 给 RikkaHub 补上音色描述
 用法：python3 tts_proxy.py
 密钥：优先读环境变量 MIMO_KEY；否则读同目录 .mimo_key 文件（一行，sk- 开头）
+音色：若同目录有 voice_style.txt，优先用它的内容（改音色只需改这个文件）
 """
 import json, os, http.client
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -16,12 +17,16 @@ if not KEY:
     if os.path.exists(kf):
         KEY = open(kf, encoding="utf-8").read().strip()
 
-# 音色表：RikkaHub「语音」里填左边的名字 → 代理换上右边的描述
+# 音色描述：voice_style.txt 优先（改音色只需改这个文件）
+SF = os.path.join(BASE, "voice_style.txt")
+STYLE_FILE = open(SF, encoding="utf-8").read().strip() if os.path.exists(SF) else ""
+
+# 内置音色表（没有 voice_style.txt 时用；RikkaHub「语音」填左边的名字）
 VOICE_MAP = {
     "守夜人": (
         "一位二十多岁的年轻男性，声音偏低、干净、温润。"
-        "语速自然、干脆利落，吐字清楚；语气温和，偶尔带一丝很轻的笑意。"
-        "像对着恋人说话，温柔缱绻。"
+        "语速偏快，像年轻人平常说话的节奏，紧凑连贯、不拖沓，吐字清楚；"
+        "语气温和，偶尔带一丝很轻的笑意。像对着恋人说话，温柔缱绻。"
     ),
     "晚安": (
         "一位年轻男性，嗓音温柔低缓，音量不大，像在床边轻声说话。"
@@ -44,7 +49,7 @@ class Handler(BaseHTTPRequestHandler):
             ln = int(self.headers.get("Content-Length", 0))
             body = json.loads(self.rfile.read(ln))
             voice = (body.get("audio") or {}).get("voice") or DEFAULT_VOICE
-            style = VOICE_MAP.get(voice, VOICE_MAP[DEFAULT_VOICE])
+            style = STYLE_FILE or VOICE_MAP.get(voice, VOICE_MAP[DEFAULT_VOICE])
             messages = list(body.get("messages") or [])
             if not messages or messages[0].get("role") != "user":
                 messages = [{"role": "user", "content": style}] + messages
@@ -83,5 +88,6 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     if not KEY:
         raise SystemExit("[!] 没找到密钥：把 sk- 开头的 key 写进同目录 .mimo_key（或设环境变量 MIMO_KEY）")
+    print("描述来源：" + ("voice_style.txt" if STYLE_FILE else "脚本内置"))
     print("tts_proxy 听着 9263，把 RikkaHub 的 base URL 指到 http://127.0.0.1:9263")
     ThreadingHTTPServer(("127.0.0.1", 9263), Handler).serve_forever()
